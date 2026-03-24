@@ -201,17 +201,44 @@ function renderPerformance() {
     if (spot && open && shares) eqPnl += (spot - open) * shares;
   });
 
-  // Calculate options P&L using LIVE spot for option pricing
+  // Calculate options P&L from Bloomberg CHG_ON_DAY (real-time)
+  // CHG_ON_DAY = dollar change in option price today (per share)
+  // qty = contracts, × 100 = shares per contract
+  // SHORT: option price UP = loss → multiply by -1
+  // LONG: option price UP = profit → multiply by +1
   let optPnl = 0;
+  const liveOpts = L?.options || {};
   (DATA.positions||[]).forEach(p => {
-    const lp = L?.prices?.[p.ticker];
-    const liveSpot = lp?.last || p.spot || 0;
     (p.legs||[]).forEach(l => {
-      const [pr] = reliablePrice(l, liveSpot);
-      const q = (l.qty||0)*100;
-      const cost = l.cost||0;
-      if (l.side==='SHORT') optPnl += (cost - pr) * q;
-      else optPnl += (pr - cost) * q;
+      const q = (l.qty||0);  // contracts
+      if (!q) return;
+      const mult = q * 100;  // contracts × 100 = shares
+      const optKey = `${p.ticker}_${l.type||''}_${l.strike||0}_${l.expiry||''}`;
+      const lo = liveOpts[optKey];
+      
+      if (lo && lo.chg_on_day != null) {
+        if (l.side==='SHORT') optPnl += (-lo.chg_on_day) * mult;
+        else optPnl += lo.chg_on_day * mult;
+      } else {
+        // Fallback: estimate from live spot + morning extrinsic
+        const lp = L?.prices?.[p.ticker];
+        const liveSpot = lp?.last || p.spot || 0;
+        const strike = l.strike||0;
+        if (!strike || !liveSpot) return;
+        
+        let intrinsic = l.type==='C' ? Math.max(liveSpot-strike,0) : Math.max(strike-liveSpot,0);
+        const bid=Math.max(l.bid||0,0), ask=Math.max(l.ask||0,0);
+        let morningMid = (bid>0&&ask>0) ? (bid+ask)/2 : (l.mid||l.last||0);
+        const morningSpot = p.spotOpen||p.spot||liveSpot;
+        let morningIntr = l.type==='C' ? Math.max(morningSpot-strike,0) : Math.max(strike-morningSpot,0);
+        const extr = Math.max(morningMid-morningIntr, 0);
+        const currentVal = intrinsic + extr * 0.95;
+        const morningVal = morningMid || (morningIntr + extr);
+        const dailyChg = currentVal - morningVal;
+        
+        if (l.side==='SHORT') optPnl += (-dailyChg) * mult;
+        else optPnl += dailyChg * mult;
+      }
     });
   });
 
