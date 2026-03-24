@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ULTY Options Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080810;color:#c8cad4;font-family:'IBM Plex Mono','Fira Code',monospace;font-size:12px}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+button{font-family:inherit;cursor:pointer}table{border-collapse:collapse;border-spacing:0}
+.header{background:#0f1117;border-bottom:1px solid rgba(255,255,255,0.05);padding:8px 16px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50}
+.dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.4)}
+.logo{font-weight:700;font-size:13px;letter-spacing:1.5px}.subtitle{color:#52556a;font-size:10px;letter-spacing:0.5px}
+.tabs{display:flex;gap:1px;margin-left:16px}
+.tab{background:transparent;color:#52556a;border:1px solid transparent;border-radius:5px;padding:5px 12px;font-size:10px;font-weight:400;display:flex;align-items:center;gap:5px}
+.tab.active{background:rgba(91,106,191,0.13);color:#8b95d4;border-color:rgba(91,106,191,0.2);font-weight:600}
+.tab-badge{background:#ef4444;color:#fff;border-radius:8px;padding:0 5px;font-size:8px;font-weight:700;line-height:16px}
+.tab-badge.warn{background:#f59e0b}.tab-badge.info{background:#5b6abf}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:10px;color:#52556a}
+.content{padding:16px}
+.metrics{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap;align-items:flex-end}
+.metric{min-width:100px}.metric-label{font-size:9px;color:#52556a;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px}
+.metric-value{font-size:18px;font-weight:700}.metric-sub{font-size:9px;color:#7a7d8e;margin-top:1px}
+.badge{padding:2px 7px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:0.3px;display:inline-block}
+.badge-sm{padding:1px 5px;font-size:9px}
+.grid{border-radius:6px;border:1px solid rgba(255,255,255,0.05);overflow:hidden}
+.grid-header{display:flex;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.05);padding:6px 0}
+.grid-header div{padding:0 4px;font-size:9px;color:#52556a;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0}
+.pos-group-header{display:flex;align-items:center;background:#141820;border-bottom:1px solid rgba(255,255,255,0.05);padding:5px 0;cursor:pointer;user-select:none}
+.pos-group-header:hover{background:#181e2a}
+.pos-row{display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,0.05);padding:4px 0;padding-left:8px}
+.pos-row:nth-child(even){background:rgba(255,255,255,0.012)}
+.alert-row{border-radius:5px;padding:8px 12px;display:flex;align-items:center;gap:10px;margin-bottom:2px}
+.alert-CRITICAL{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.13)}
+.alert-URGENT{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.1)}
+.alert-WARNING{background:rgba(212,160,23,0.04);border:1px solid rgba(212,160,23,0.08)}
+.alert-INFO{background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.06)}
+.btn{border:none;border-radius:4px;padding:3px 10px;font-size:9px;font-weight:700;color:#fff}
+.btn-accent{background:#5b6abf}.btn-green{background:#22c55e}.btn-red{background:#ef4444}
+.btn-ghost{background:rgba(255,255,255,0.04);color:#52556a;border:1px solid rgba(255,255,255,0.08)}
+.btn-accent-ghost{background:rgba(91,106,191,0.15);color:#5b6abf;border:1px solid rgba(91,106,191,0.3)}
+.mono{font-family:'IBM Plex Mono',monospace}
+.green{color:#22c55e}.red{color:#ef4444}.orange{color:#f59e0b}.yellow{color:#d4a017}.dim{color:#7a7d8e}.muted{color:#52556a}.text{color:#c8cad4}.bold{font-weight:700}
+table.data-table{width:100%;font-size:11px}
+table.data-table th{padding:6px 5px;text-align:center;font-size:9px;color:#52556a;border-bottom:1px solid rgba(255,255,255,0.05)}
+table.data-table th:first-child{text-align:left}
+table.data-table td{padding:5px;border-bottom:1px solid rgba(255,255,255,0.05)}
+table.data-table tr:nth-child(even){background:rgba(255,255,255,0.015)}
+details summary{list-style:none}details summary::-webkit-details-marker{display:none}
+</style>
+</head>
+<body>
+<div class="header">
+  <div style="display:flex;align-items:center;gap:6px"><div class="dot" id="statusDot"></div><span class="logo">ULTY</span><span class="subtitle">MONITOR</span></div>
+  <div class="tabs" id="tabBar"></div>
+  <div class="header-right"><span id="navDisplay">$890M NAV</span><span>25 names</span><span id="clock" class="dim"></span></div>
+</div>
+<div class="content" id="content"></div>
+
+<script>
+const API = 'http://localhost:8000';
+
+// ─── HOSTED MODE ───
+const HOSTED = true;
+const GIST_URL = 'https://gist.githubusercontent.com/ULTYDASH/b2779d34c1a3973c901faee23ba0522d/raw/ulty_live.json';
+
+let DATA = null, ALERTS = [], TRADES = [], BUILDS = [], ANALYTICS = null, COLLAPSED = {};
+let currentTab = 'performance';
+const TABS = [
+  {id:'performance',label:'Performance'},
+  {id:'positions',label:'Positions'},
+  {id:'trades',label:'Trades'},
+  {id:'weeklyBuild',label:'Weekly Build'},
+  {id:'alerts',label:'Alerts'},
+  {id:'earnings',label:'Earnings'},
+  {id:'settings',label:'Config'},
+];
+
+// ─── DATA ───
+async function fetchData() {
+  if (typeof HOSTED !== 'undefined' && HOSTED) {
+    try {
+      const r = await fetch(GIST_URL + '?t=' + Date.now());
+      if (r.ok) {
+        const hosted = await r.json();
+        if (hosted.positions) { DATA = hosted; ALERTS = genAlerts(DATA.positions); document.getElementById('statusDot').style.background='#22c55e'; if(DATA.nav) document.getElementById('navDisplay').textContent='$'+DATA.nav.toLocaleString()+' NAV'; }
+        if (hosted.live) LIVE = hosted.live;
+        if (hosted.analytics) ANALYTICS = hosted.analytics;
+        if (hosted.triggers) TRADES = hosted.triggers;
+        if (hosted.builds) BUILDS = hosted.builds;
+      }
+    } catch(e) { document.getElementById('statusDot').style.background='#f59e0b'; }
+    render();
+    return;
+  }
+  try {
+    const r = await fetch(API+'/api/positions');
+    if (r.ok) { DATA = await r.json(); if(DATA.positions){ALERTS=genAlerts(DATA.positions);document.getElementById('statusDot').style.background='#22c55e';if(DATA.nav)document.getElementById('navDisplay').textContent='$'+DATA.nav.toLocaleString()+' NAV';}}
+  } catch(e) { if(!DATA)DATA={positions:[]}; document.getElementById('statusDot').style.background='#f59e0b'; }
+  try { const r=await fetch(API+'/api/triggers'); if(r.ok){const d=await r.json();TRADES=(d.trades||[]).filter(t=>t.rule!=='WEEKLY_BUILD');} } catch(e){}
+  try { const r=await fetch(API+'/api/builds'); if(r.ok){const d=await r.json();BUILDS=d.trades||[];} } catch(e){}
+  // Analytics fetched separately — not on every cycle
+  if(!ANALYTICS){try{const r=await fetch(API+'/api/analytics');if(r.ok){ANALYTICS=await r.json();}}catch(e){}}
+  await fetchLive();
+  // Sync live prices into position data before render
+  if(LIVE?.prices && DATA?.positions){
+    DATA.positions.forEach(p=>{
+      const lp=LIVE.prices[p.ticker];
+      if(lp?.last) p.spot=lp.last;
+      if(lp?.open) p.spotOpen=lp.open;
+      if(lp?.chg_pct!=null) p.chgPct=lp.chg_pct;
+    });
+  }
+  render();
+}
+
+function reliablePrice(leg, spot) {
+  if(!leg)return[0,false];const bid=Math.max(leg.bid||0,0),ask=Math.max(leg.ask||0,0),mid=Math.max(leg.mid||0,0),last=Math.max(leg.last||0,0);
+  const k=leg.strike||0,ot=leg.type||'C',otm=ot==='C'?(k/spot-1)*100:(1-k/spot)*100;
+  if(bid>0&&ask>0&&ask>=bid)return[(bid+ask)/2,true];if(bid===0&&ask>0&&ask<=0.10)return[ask*0.5,true];
+  if(bid===0&&ask>0.10)return[ask*0.25,false];if(mid>0){if(otm>8&&mid>spot*0.03)return[mid,false];return[mid,true];}
+  if(last>0){if(otm>5&&last>spot*0.02)return[last,false];return[last,false];}return[0,false];
+}
+
+function genAlerts(positions) {
+  const a=[],now=new Date().toLocaleTimeString();
+  (positions||[]).forEach(p=>{const spot=p.spot||0;if(spot<=0)return;const legs=p.legs||[];
+    const sc=legs.find(l=>l.type==='C'&&l.side==='SHORT'),sp=legs.find(l=>l.type==='P'&&l.side==='SHORT'),lp=legs.find(l=>l.type==='P'&&l.side==='LONG');
+    const[scp,sco]=reliablePrice(sc,spot),[spp,spo]=reliablePrice(sp,spot),[lpp,lpo]=reliablePrice(lp,spot);
+    if(sc&&sc.cost>0&&sco&&scp>0&&scp/sc.cost<=0.10)a.push({time:now,ticker:p.ticker,rule:'R1',level:'INFO',leg:'C',desc:'Call '+(100*(1-scp/sc.cost)).toFixed(0)+'% captured ($'+scp.toFixed(2)+' of $'+sc.cost.toFixed(2)+')',action:'Close call. Recap same week.'});
+    if(sc&&Math.abs(sc.delta||0)>=0.60)a.push({time:now,ticker:p.ticker,rule:'R3',level:'WARNING',leg:'C',desc:'Call Δ '+Math.abs(sc.delta).toFixed(2)+' ≥ 0.60',action:'Close call. Leave uncapped.'});
+    if(sp&&Math.abs(sp.delta||0)>=0.85)a.push({time:now,ticker:p.ticker,rule:'R4',level:'CRITICAL',leg:'P',desc:'PUT STOP: SP Δ '+Math.abs(sp.delta).toFixed(2)+' ≥ 0.85',action:'Close spread'});
+    else if(sp&&Math.abs(sp.delta||0)>=0.70)a.push({time:now,ticker:p.ticker,rule:'R4',level:'WARNING',leg:'P',desc:'Put Δ approaching: '+Math.abs(sp.delta).toFixed(2),action:'Monitor closely.'});
+    if(sp&&lp&&sp.cost>0&&spo&&lpo){const o=sp.cost-(lp.cost||0),c=spp-lpp;if(o>0&&c>=0&&c/o<=0.10)a.push({time:now,ticker:p.ticker,rule:'R2',level:'INFO',leg:'P',desc:'Put spread '+(100*(1-c/o)).toFixed(0)+'% captured',action:'Roll forward.'});}
+    if(lp&&lp.cost>0&&(lp.bid||0)>0&&sp&&Math.abs(sp.delta||0)<0.85&&(lp.bid)/lp.cost>=2.0)a.push({time:now,ticker:p.ticker,rule:'R5',level:'INFO',leg:'P',desc:'LP at '+((lp.bid)/lp.cost).toFixed(1)+'x cost',action:'DISCRETIONARY: Harvest.'});
+  });return a.sort((a,b)=>({CRITICAL:0,URGENT:1,WARNING:2,INFO:3}[a.level])-({CRITICAL:0,URGENT:1,WARNING:2,INFO:3}[b.level]));
+}
+
+// ─── TABS ───
+function renderTabs(){const bar=document.getElementById('tabBar');const crit=ALERTS.filter(a=>a.level==='CRITICAL').length,urg=ALERTS.filter(a=>a.level==='URGENT').length;
+  bar.innerHTML=TABS.map(t=>{let active=t.id===currentTab?' active':'',badge='';
+    if(t.id==='alerts'&&(crit+urg)>0)badge=`<span class="tab-badge${crit?'':' warn'}">${crit+urg}</span>`;
+    if(t.id==='trades'&&TRADES.length>0)badge=`<span class="tab-badge warn">${TRADES.length}</span>`;
+    if(t.id==='weeklyBuild'&&BUILDS.length>0)badge=`<span class="tab-badge info">${BUILDS.length}</span>`;
+    return`<button class="tab${active}" onclick="switchTab('${t.id}')">${t.label}${badge}</button>`;}).join('');
+}
+function switchTab(id){currentTab=id;render();}
+function render(){renderTabs();const c=document.getElementById('content');
+  if(!DATA||!DATA.positions){c.innerHTML='<p style="color:#52556a;padding:40px;text-align:center">Loading...</p>';return;}
+  switch(currentTab){
+    case'positions':c.innerHTML=renderPositions();break;case'performance':c.innerHTML=renderPerformance();break;
+    case'trades':c.innerHTML=renderTrades();break;
+    case'weeklyBuild':c.innerHTML=renderWeeklyBuild();break;case'alerts':c.innerHTML=renderAlerts();break;
+    case'earnings':c.innerHTML=renderEarnings();break;case'settings':c.innerHTML=renderSettings();break;
+  }
+}
+
+// ─── PERFORMANCE ───
+function fmt$(n) { return n.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0}); }
+
+let LIVE = null;
+
+async function fetchLive() {
+  try { const r = await fetch(API+'/api/live'); if(r.ok) LIVE = await r.json(); } catch(e){}
+}
+
+function renderPerformance() {
+  const A = ANALYTICS;
+  const L = LIVE;
+  const nav = L?.fund?.aum || DATA.nav || 906000000;
+  const fundPx = L?.fund?.px || A?.fund?.px || 0;
+  const connected = L?.connected || false;
+
+  // Fund intraday return from Bloomberg PCT_CHG_ON_DAY (real-time)
+  const fundChg = L?.fund?.chg_pct != null ? L.fund.chg_pct : (A?.fund?.daily_chg || 0);
+  const qqqChg = L?.fund?.qqq_chg != null ? L.fund.qqq_chg : (A?.benchmark?.daily_chg || 0);
+
+  // Calculate equity P&L from live streaming prices
+  let eqPnl = 0;
+  (DATA.positions||[]).forEach(p => {
+    const lp = L?.prices?.[p.ticker];
+    const spot = lp?.last || p.spot || 0;
+    const open = lp?.open || p.spotOpen || spot;
+    const shares = p.shares || 0;
+    if (spot && open && shares) eqPnl += (spot - open) * shares;
+  });
+
+  // Calculate options P&L using LIVE spot for option pricing
+  let optPnl = 0;
+  (DATA.positions||[]).forEach(p => {
+    const lp = L?.prices?.[p.ticker];
+    const liveSpot = lp?.last || p.spot || 0;
+    (p.legs||[]).forEach(l => {
+      const [pr] = reliablePrice(l, liveSpot);
+      const q = (l.qty||0)*100;
+      const cost = l.cost||0;
+      if (l.side==='SHORT') optPnl += (cost - pr) * q;
+      else optPnl += (pr - cost) * q;
+    });
+  });
+
+  // Fund-level daily P&L from Bloomberg PCT_CHG_ON_DAY
+  const fundDailyPnl = fundChg ? nav * fundChg / 100 : eqPnl + optPnl;
+  const fundDailyPct = fundChg || (nav > 0 ? fundDailyPnl / nav * 100 : 0);
+  const eqPnlPct = nav > 0 ? (eqPnl / nav * 100) : 0;
+  const optPnlPct = nav > 0 ? (optPnl / nav * 100) : 0;
+  
+  let html = `<div style="display:flex;gap:8px;margin-bottom:14px;align-items:flex-end">
+    <div style="flex:1"><div class="metric-label">ULTY Total Daily P&L ${connected?'<span style="color:#22c55e;font-size:8px">● LIVE</span>':'<span style="color:#52556a;font-size:8px">○ DELAYED</span>'}</div>
+      <div style="font-size:28px;font-weight:700" class="${fundDailyPnl>=0?'green':'red'}">${fundDailyPnl>=0?'+':'-'}$${fmt$(Math.abs(Math.round(fundDailyPnl)))}</div>
+      <div style="font-size:14px;font-weight:600;margin-top:2px" class="${fundDailyPct>=0?'green':'red'}">${fundDailyPct>=0?'+':''}${fundDailyPct.toFixed(2)}%</div></div>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn btn-accent" style="padding:6px 14px;font-size:10px" onclick="refreshAnalytics()">REFRESH ANALYTICS</button></div></div>`;
+
+  // P&L breakdown
+  html += `<div class="metrics">
+    <div class="metric"><div class="metric-label">Equity P&L</div>
+      <div class="metric-value ${eqPnl>=0?'green':'red'}">${eqPnl>=0?'+':'-'}$${fmt$(Math.abs(Math.round(eqPnl)))}</div>
+      <div class="metric-sub ${eqPnlPct>=0?'green':'red'}">${eqPnlPct>=0?'+':''}${eqPnlPct.toFixed(3)}%</div></div>
+    <div class="metric"><div class="metric-label">Options P&L</div>
+      <div class="metric-value ${optPnl>=0?'green':'red'}">${optPnl>=0?'+':'-'}$${fmt$(Math.abs(Math.round(optPnl)))}</div>
+      <div class="metric-sub ${optPnlPct>=0?'green':'red'}">${optPnlPct>=0?'+':''}${optPnlPct.toFixed(3)}%</div></div>
+    <div class="metric"><div class="metric-label">AUM</div><div class="metric-value">$${fmt$(nav)}</div></div>
+    <div class="metric"><div class="metric-label">ULTY Price</div><div class="metric-value">${fundPx?'$'+Number(fundPx).toFixed(2):'—'}</div>
+      <div class="metric-sub ${fundChg>=0?'green':'red'}">${fundChg?(fundChg>=0?'+':'')+Number(fundChg).toFixed(2)+'%':'—'}</div></div>
+    <div class="metric"><div class="metric-label">QQQ</div><div class="metric-value">${L?.fund?.qqq_px?'$'+Number(L.fund.qqq_px).toFixed(2):(A?.benchmark?.px?'$'+Number(A.benchmark.px).toFixed(2):'—')}</div>
+      <div class="metric-sub ${qqqChg>=0?'green':'red'}">${qqqChg?(qqqChg>=0?'+':'')+Number(qqqChg).toFixed(2)+'%':'—'}</div></div>
+    <div class="metric"><div class="metric-label">vs QQQ</div>
+      <div class="metric-value ${(fundChg-qqqChg)>=0?'green':'red'}">${fundChg&&qqqChg?((fundChg-qqqChg)>=0?'+':'')+(fundChg-qqqChg).toFixed(2)+'%':'—'}</div></div>
+  </div>`;
+
+  // Returns comparison table
+  const periods = ['1d','1w','mtd','1m','6m','1y','3y','5y','ytd','inception'];
+  const labels = ['1 Day','1 Week','MTD','1 Mo','6 Mo','1 Yr','3 Yr (ann)','5 Yr (ann)','YTD','Inception'];
+  html += `<div style="display:flex;gap:16px;margin-bottom:16px"><div style="flex:1">
+    <div style="font-size:10px;color:#52556a;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Total Return — ULTY vs QQQ</div>
+    <div class="grid"><table class="data-table"><thead><tr><th style="text-align:left">Period</th><th>ULTY</th><th>QQQ</th><th>Excess</th></tr></thead><tbody>`;
+  periods.forEach((p,i) => {
+    const fr = A?.fund?.returns?.[p]; const br = A?.benchmark?.returns?.[p];
+    const fv = fr!=null && !isNaN(fr) ? Number(fr) : null;
+    const bv = br!=null && !isNaN(br) ? Number(br) : null;
+    const ex = (fv!=null && bv!=null) ? fv - bv : null;
+    const fc = fv!=null ? (fv>=0?'green':'red') : 'dim';
+    const bc = bv!=null ? (bv>=0?'green':'red') : 'dim';
+    const ec = ex!=null ? (ex>=0?'green':'red') : 'dim';
+    html += `<tr><td class="bold" style="font-size:10px">${labels[i]}</td>
+      <td class="center mono ${fc}" style="font-weight:600">${fv!=null?(fv>=0?'+':'')+fv.toFixed(2)+'%':'—'}</td>
+      <td class="center mono ${bc}">${bv!=null?(bv>=0?'+':'')+bv.toFixed(2)+'%':'—'}</td>
+      <td class="center mono bold ${ec}">${ex!=null?(ex>=0?'+':'')+ex.toFixed(2)+'%':'—'}</td></tr>`;
+  });
+  html += '</tbody></table></div></div>';
+
+  // Portfolio metrics
+  const pm = A?.portfolio_metrics || {};
+  html += `<div style="flex:1">
+    <div style="font-size:10px;color:#52556a;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Portfolio Attributes (NAV-weighted)</div>
+    <div class="grid"><table class="data-table"><thead><tr><th style="text-align:left">Metric</th><th>Value</th></tr></thead><tbody>`;
+  const metrics = [
+    ['Wtd Implied Vol', pm.weighted_iv ? pm.weighted_iv.toFixed(1)+'%' : '—', pm.weighted_iv>50?'#f59e0b':'#c8cad4'],
+    ['Beta (vs SPX)', pm.beta ? pm.beta.toFixed(2) : '—', pm.beta>1.2?'#f59e0b':'#c8cad4'],
+    ['P/E', pm.pe ? pm.pe.toFixed(1)+'x' : '—', '#c8cad4'],
+    ['Fwd P/E', pm.fwd_pe ? pm.fwd_pe.toFixed(1)+'x' : '—', '#c8cad4'],
+    ['EV/EBITDA', pm.ev_ebitda ? pm.ev_ebitda.toFixed(1)+'x' : '—', '#c8cad4'],
+    ['Sales Growth', pm.sales_growth ? pm.sales_growth.toFixed(1)+'%' : '—', pm.sales_growth>20?'#22c55e':'#c8cad4'],
+    ['EPS Growth', pm.eps_growth ? pm.eps_growth.toFixed(1)+'%' : '—', pm.eps_growth>20?'#22c55e':'#c8cad4'],
+  ];
+  metrics.forEach(([label, val, color]) => {
+    html += `<tr><td style="font-size:10px">${label}</td><td class="center mono bold" style="color:${color}">${val}</td></tr>`;
+  });
+  html += '</tbody></table></div></div></div>';
+
+  // GICS Concentration
+  html += `<div style="display:flex;gap:16px;margin-bottom:16px">`;
+
+  // GICS Level 3 (Industry)
+  const g3 = A?.concentration?.gics3 || {};
+  html += `<div style="flex:1"><div style="font-size:10px;color:#52556a;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">GICS Industry Concentration (25% limit)</div>
+    <div class="grid"><table class="data-table"><thead><tr><th style="text-align:left">Industry</th><th>Weight</th><th>Names</th><th>Status</th></tr></thead><tbody>`;
+  Object.entries(g3).forEach(([name, data]) => {
+    const w = data.weight;
+    const breach = w > 25;
+    const wc = breach ? '#ef4444' : w > 20 ? '#f59e0b' : '#c8cad4';
+    html += `<tr><td style="font-size:10px">${name}</td>
+      <td class="center mono bold" style="color:${wc}">${w.toFixed(1)}%</td>
+      <td class="center dim" style="font-size:9px">${data.names.join(', ')}</td>
+      <td class="center">${breach?'<span style="color:#ef4444;font-weight:700">BREACH</span>':w>20?'<span style="color:#f59e0b">WATCH</span>':'<span class="dim">OK</span>'}</td></tr>`;
+  });
+  html += '</tbody></table></div></div>';
+
+  // GICS Level 1 (Sector)
+  const g1 = A?.concentration?.gics1 || {};
+  html += `<div style="flex:1"><div style="font-size:10px;color:#52556a;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">GICS Sector Concentration</div>
+    <div class="grid"><table class="data-table"><thead><tr><th style="text-align:left">Sector</th><th>Weight</th><th>Names</th></tr></thead><tbody>`;
+  Object.entries(g1).forEach(([name, data]) => {
+    html += `<tr><td style="font-size:10px">${name}</td>
+      <td class="center mono bold">${data.weight.toFixed(1)}%</td>
+      <td class="dim" style="font-size:9px">${data.names.join(', ')}</td></tr>`;
+  });
+  html += '</tbody></table></div></div></div>';
+
+  // Single name concentration
+  const flags = A?.concentration?.flags || [];
+  const nameFlags = flags.filter(f => f.level === 'SINGLE_NAME').sort((a,b) => b.weight - a.weight);
+  if (nameFlags.length) {
+    html += `<div style="margin-bottom:16px"><div style="font-size:10px;color:#52556a;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Single Name Concentration (>5% = flagged, >50% portfolio in >5% names = breach)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">`;
+    const totalOver5 = nameFlags.reduce((s,f) => s + f.weight, 0);
+    nameFlags.forEach(f => {
+      html += `<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.15);border-radius:4px;padding:4px 8px;font-size:10px">
+        <span class="bold">${f.name}</span> <span style="color:#f59e0b">${f.weight}%</span></div>`;
+    });
+    html += `<div style="padding:4px 8px;font-size:10px;color:${totalOver5>50?'#ef4444':'#7a7d8e'}">Total in >5% names: ${totalOver5.toFixed(1)}%${totalOver5>50?' — BREACH':''}</div>`;
+    html += '</div></div>';
+  }
+
+  // Holdings detail table
+  const hld = A?.holdings || {};
+  html += `<div style="font-size:10px;color:#52556a;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">Holdings Detail</div>
+    <div class="grid"><table class="data-table"><thead><tr>`;
+  ['Ticker','Weight','Spot','Chg','IV','Beta','P/E','Fwd P/E','EV/EBITDA','Sales Gr','EPS Gr','Sector','Industry'].forEach(h=>html+=`<th>${h}</th>`);
+  html += '</tr></thead><tbody>';
+  Object.entries(hld).sort((a,b) => (b[1].weight||0) - (a[1].weight||0)).forEach(([t, h]) => {
+    const chg = h.chg_1d; const cc = chg!=null?(chg>=0?'green':'red'):'dim';
+    html += `<tr><td class="bold text">${t}</td>
+      <td class="center mono">${(h.weight||0).toFixed(1)}%</td>
+      <td class="center mono">$${h.spot?Number(h.spot).toFixed(0):''}</td>
+      <td class="center mono ${cc}">${chg!=null?(chg>=0?'+':'')+Number(chg).toFixed(1)+'%':'—'}</td>
+      <td class="center mono" style="color:${(h.iv30||0)>60?'#f59e0b':'#7a7d8e'}">${h.iv30?Number(h.iv30).toFixed(0)+'%':'—'}</td>
+      <td class="center mono">${h.beta?Number(h.beta).toFixed(2):'—'}</td>
+      <td class="center mono">${h.pe&&h.pe>0?Number(h.pe).toFixed(1):'—'}</td>
+      <td class="center mono">${h.fwd_pe&&h.fwd_pe>0?Number(h.fwd_pe).toFixed(1):'—'}</td>
+      <td class="center mono">${h.ev_ebitda&&h.ev_ebitda>0?Number(h.ev_ebitda).toFixed(1):'—'}</td>
+      <td class="center mono ${(h.sales_growth||0)>20?'green':''}">${h.sales_growth!=null?Number(h.sales_growth).toFixed(1)+'%':'—'}</td>
+      <td class="center mono ${(h.eps_growth||0)>20?'green':''}">${h.eps_growth!=null?Number(h.eps_growth).toFixed(1)+'%':'—'}</td>
+      <td class="dim" style="font-size:9px">${h.gics_sector||''}</td>
+      <td class="dim" style="font-size:9px">${h.gics_industry||''}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  if (!A) html = `<div style="padding:40px;text-align:center;color:#52556a">No analytics data loaded. Click REFRESH DATA or run:<br><code style="color:#5b6abf">python backend\\pull_analytics.py</code></div>` + html;
+
+  return html;
+}
+
+async function refreshAnalytics() {
+  try {
+    const r = await fetch(API+'/api/refresh_analytics');
+    if(r.ok) {
+      const d = await r.json();
+      // Only update if we got real data, not an error
+      if(d && !d.error && d.fund) ANALYTICS = d;
+    }
+  } catch(e) { console.error('Analytics refresh error:', e); }
+  // Also fetch live so render has both
+  await fetchLive();
+  if(LIVE?.prices && DATA?.positions){
+    DATA.positions.forEach(p=>{
+      const lp=LIVE.prices[p.ticker];
+      if(lp?.last) p.spot=lp.last;
+      if(lp?.open) p.spotOpen=lp.open;
+      if(lp?.chg_pct!=null) p.chgPct=lp.chg_pct;
+    });
+  }
+  render();
+}
+
+// ─── POSITIONS ───
+function renderPositions(){const positions=DATA.positions,totalLegs=positions.reduce((s,p)=>s+(p.legs||[]).length,0);
+  let tc=0,tm=0;positions.forEach(p=>(p.legs||[]).forEach(l=>{const[pr]=reliablePrice(l,p.spot||0);const q=(l.qty||0)*100;
+    if(l.side==='SHORT'){tc+=(l.cost||0)*q;tm+=pr*q;}else{tc-=(l.cost||0)*q;tm-=pr*q;}}));const tp=tc-tm;
+  const cols=[{k:'side',l:'Side',w:50,a:'center'},{k:'security',l:'Security',w:195,a:'left'},{k:'pos',l:'Position',w:62,a:'right'},{k:'cost',l:'Cost',w:60,a:'right'},{k:'last',l:'Last',w:60,a:'right'},{k:'bid',l:'Bid',w:56,a:'right'},{k:'ask',l:'Ask',w:56,a:'right'},{k:'delta',l:'Delta',w:52,a:'right'},{k:'itm',l:'$ITM',w:62,a:'right'},{k:'itmPct',l:'%ITM',w:52,a:'right'},{k:'intrinsic',l:'Intrinsic',w:62,a:'right'},{k:'extrinsic',l:'Extr/Time',w:62,a:'right'},{k:'capture',l:'Capture%',w:58,a:'right'},{k:'assign',l:'Asgn',w:40,a:'center'}];
+  let html=`<div class="metrics"><div class="metric"><div class="metric-label">Net Collected</div><div class="metric-value green">$${fmt$(tc)}</div></div>
+    <div class="metric"><div class="metric-label">Cost to Close</div><div class="metric-value red">$${fmt$(tm)}</div></div>
+    <div class="metric"><div class="metric-label">Unrealized P&L</div><div class="metric-value ${tp>=0?'green':'red'}">${tp>=0?'+':'-'}$${fmt$(Math.abs(tp))}</div></div>
+    <div class="metric"><div class="metric-label">Names</div><div class="metric-value">${positions.length}</div></div>
+    <div class="metric"><div class="metric-label">Legs</div><div class="metric-value">${totalLegs}</div></div>
+    <div class="metric"><div class="metric-label">Updated</div><div class="metric-value dim" style="font-size:11px">${DATA.timestamp?DATA.timestamp.split('T')[1]?.split('.')[0]||'':''}</div></div></div>`;
+  html+=`<div class="grid"><div class="grid-header">${cols.map(c=>`<div style="width:${c.w}px;text-align:${c.a}">${c.l}</div>`).join('')}</div>`;
+  positions.forEach((p,pi)=>{const undChg=p.chgPct||((p.spot/p.spotOpen-1)*100);const isC=COLLAPSED[p.ticker];
+    let nc=0,nm=0;(p.legs||[]).forEach(l=>{const[pr]=reliablePrice(l,p.spot||0);const q=(l.qty||0)*100;if(l.side==='SHORT'){nc+=(l.cost||0)*q;nm+=pr*q;}else{nc-=(l.cost||0)*q;nm-=pr*q;}});const np=nc-nm;
+    html+=`<div class="pos-group-header" onclick="toggleCollapse('${p.ticker}')"><div style="width:50px;text-align:center;padding:0 4px"><span style="color:#50a8a0;font-size:10px;font-weight:600">LONG</span></div>
+      <div style="width:195px;padding:0 4px;display:flex;align-items:center;gap:6px"><span style="font-size:9px;color:${isC?'#7a7d8e':'#c8cad4'}">${isC?'▶':'▼'}</span><span class="bold text">${p.ticker} US</span><span style="font-size:9px" class="muted">IV ${p.iv30||0}%</span></div>
+      <div style="width:62px;text-align:right;padding:0 4px" class="dim">${(p.shares||0).toLocaleString()}</div><div style="width:60px"></div>
+      <div style="width:60px;text-align:right;padding:0 4px" class="bold text">${(p.spot||0).toFixed(2)}</div>
+      <div style="width:56px;text-align:right;padding:0 4px" class="green">${(p.spotOpen||0).toFixed(2)}</div>
+      <div style="width:56px;text-align:right;padding:0 4px" class="${undChg>=0?'green':'red'}">${undChg>=0?'+':''}${undChg.toFixed(2)}%</div>
+      <div style="flex:1"></div><div style="width:100px;text-align:right;padding:0 8px;font-size:11px" class="bold ${np>=0?'green':'red'}">${np>=0?'+':'-'}$${fmt$(Math.abs(np))}</div></div>`;
+    if(!isC)(p.legs||[]).forEach((l,li)=>{const isS=l.side==='SHORT',sc=isS?'#e06070':'#50a8a0',ad=Math.abs(l.delta||0);
+      const dc=isS&&l.type==='P'&&ad>=0.85?'#ef4444':(isS&&l.type==='P'&&ad>=0.70)||(isS&&l.type==='C'&&ad>=0.60)?'#f59e0b':'#7a7d8e';
+      const dw=dc!=='#7a7d8e'?700:400,itm=l.itm_dollar||0,ic=itm>0?(isS?'#ef4444':'#22c55e'):'#7a7d8e';
+      const cap=l.capture_pct,cc=cap!=null?(cap>=90?'#22c55e':cap>=70?'#d4a017':'#7a7d8e'):'#7a7d8e',cw=cap>=90?700:400;
+      const intr=l.intrinsic||0,inc=intr>0.01?(isS?'#ef4444':'#22c55e'):'#7a7d8e';
+      html+=`<div class="pos-row"><div style="width:50px;text-align:center;padding:0 4px"><span style="color:${sc};font-size:10px;font-weight:600">${l.side}</span></div>
+        <div style="width:195px;padding:0 4px;color:#7a7d8e;font-size:10px" class="mono">${l.security||''}</div>
+        <div style="width:62px;text-align:right;padding:0 4px;color:${isS?'#e06070':'#c8cad4'}" class="mono">${(l.pos||0).toLocaleString()}</div>
+        <div style="width:60px;text-align:right;padding:0 4px" class="dim mono">${(l.cost||0).toFixed(2)}</div>
+        <div style="width:60px;text-align:right;padding:0 4px;font-weight:600" class="text mono">${(l.last||l.mid||0).toFixed(2)}</div>
+        <div style="width:56px;text-align:right;padding:0 4px" class="green mono">${(l.bid||0).toFixed(2)}</div>
+        <div style="width:56px;text-align:right;padding:0 4px" class="red mono">${(l.ask||0).toFixed(2)}</div>
+        <div style="width:52px;text-align:right;padding:0 4px;color:${dc};font-weight:${dw}" class="mono">${(l.delta||0).toFixed(2)}</div>
+        <div style="width:62px;text-align:right;padding:0 4px;color:${ic}" class="mono">${itm>0?itm.toFixed(2):itm<0?'('+Math.abs(itm).toFixed(2)+')':'—'}</div>
+        <div style="width:52px;text-align:right;padding:0 4px;font-size:10px" class="dim mono">${(l.itm_pct||0).toFixed(1)}%</div>
+        <div style="width:62px;text-align:right;padding:0 4px;color:${inc};font-size:10px" class="mono">${intr>0.01?intr.toFixed(2):'0.00'}</div>
+        <div style="width:62px;text-align:right;padding:0 4px;font-size:10px" class="dim mono">${(l.extrinsic||0).toFixed(2)}</div>
+        <div style="width:58px;text-align:right;padding:0 4px;color:${cc};font-weight:${cw}" class="mono">${cap!=null?cap.toFixed(0)+'%':''}</div>
+        <div style="width:40px;text-align:center">${l.assign_risk?'<span style="color:#ef4444;font-size:9px;font-weight:700">⚠</span>':''}</div></div>`;});
+  });html+='</div>';return html;}
+function toggleCollapse(t){COLLAPSED[t]=!COLLAPSED[t];render();}
+
+// ─── TRADES (rule triggers only) ───
+function renderTrades(){
+  const rc={R1:'#22c55e',R2:'#22c55e',R3:'#f59e0b',R4:'#ef4444',R5:'#5b6abf'};
+  let html=`<div class="metrics"><div class="metric"><div class="metric-label">Rule Triggers</div><div class="metric-value" style="color:#f59e0b">${TRADES.length}</div></div>
+    <div style="margin-left:auto"><button class="btn btn-accent" style="padding:6px 14px;font-size:10px" onclick="scanTriggers()">SCAN TRIGGERS</button></div></div>`;
+  if(!TRADES.length){html+='<div style="padding:40px;text-align:center;color:#52556a">No rule triggers. Click SCAN to check positions.</div>';return html;}
+  TRADES.forEach(t=>{const c=rc[t.rule]||'#5b6abf',nc=t.net_credit>=0?'#22c55e':'#ef4444',risk=t.risk_check||{};
+    html+=`<div style="background:#0f1117;border:1px solid rgba(255,255,255,0.05);border-left:3px solid ${c};border-radius:6px;padding:14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="badge" style="background:${c}18;color:${c}">${t.rule}</span>
+        <span class="bold text" style="font-size:14px">${t.ticker}</span><span class="dim" style="font-size:10px">${t.trigger||''}</span>
+        <span style="margin-left:auto;font-size:13px;font-weight:700;color:${nc}">Net: ${t.net_credit>=0?'+':''}$${t.net_credit.toFixed(4)}</span></div>`;
+    if(t.close_legs?.length){html+=`<div style="margin-bottom:6px"><div style="font-size:9px;color:#52556a;text-transform:uppercase;margin-bottom:3px">Close</div>`;
+      t.close_legs.forEach(l=>{const ac=l.action.includes('BUY')?'#ef4444':'#22c55e';
+        html+=`<div style="display:flex;gap:10px;padding:3px 8px;background:rgba(239,68,68,0.04);border-radius:4px;margin-bottom:2px;font-size:10px;align-items:center">
+          <span style="color:${ac};width:110px;font-weight:600">${l.action}</span><span class="mono dim" style="flex:1">${l.security||''}</span>
+          <span class="mono" style="width:40px;text-align:right">×${l.qty}</span><span class="mono" style="width:70px;text-align:right;color:${ac}">$${l.est_price.toFixed(4)}</span></div>`;});html+='</div>';}
+    if(t.open_legs?.length){html+=`<div style="margin-bottom:6px"><div style="font-size:9px;color:#52556a;text-transform:uppercase;margin-bottom:3px">Open</div>`;
+      t.open_legs.forEach(l=>{const ac=l.action.includes('SELL')?'#22c55e':'#ef4444';
+        html+=`<div style="display:flex;gap:10px;padding:3px 8px;background:rgba(34,197,94,0.04);border-radius:4px;margin-bottom:2px;font-size:10px;align-items:center">
+          <span style="color:${ac};width:110px;font-weight:600">${l.action}</span><span class="mono dim" style="flex:1">${l.security||''}</span>
+          <span class="mono" style="width:40px;text-align:right">×${l.qty}</span><span class="mono" style="width:70px;text-align:right;color:${ac}">$${l.est_price.toFixed(4)}</span>
+          ${l.est_delta?`<span class="mono dim" style="width:45px;text-align:right">Δ${l.est_delta.toFixed(2)}</span>`:''}
+          ${l.bid?`<span class="mono dim" style="font-size:9px">bid $${l.bid.toFixed(2)}</span>`:''}</div>`;});html+='</div>';}
+    if(Object.keys(risk).length){html+=`<div style="display:flex;flex-wrap:wrap;gap:10px;padding:5px 8px;background:rgba(255,255,255,0.02);border-radius:4px;margin-bottom:8px;font-size:9px">`;
+      if(risk.dte_remaining!=null)html+=`<span class="dim">DTE: <span class="text">${risk.dte_remaining}</span></span>`;
+      if(risk.hit_pct!=null)html+=`<span class="dim">Hit: <span style="color:${risk.hit_pct>=80?'#22c55e':risk.hit_pct>=50?'#f59e0b':'#ef4444'};font-weight:700">${risk.hit_pct}%</span></span>`;
+      if(risk.new_call_otm_pct!=null)html+=`<span class="dim">OTM: ${risk.new_call_otm_pct}%</span>`;
+      if(risk.new_spread_width!=null)html+=`<span class="dim">Width: $${risk.new_spread_width}</span>`;
+      if(risk.reason)html+=`<span class="dim">${risk.reason}</span>`;
+      if(risk.discretionary)html+=`<span class="badge badge-sm" style="background:rgba(91,106,191,0.1);color:#5b6abf">DISCRETIONARY</span>`;html+='</div>';}
+    html+=`<div style="display:flex;gap:8px"><button class="btn btn-green" style="padding:5px 14px;font-size:10px" onclick="executeTrade('trigger','${t.ticker}')">EXECUTE</button>
+      <button class="btn btn-ghost" style="padding:5px 14px;font-size:10px" onclick="dismissTrade('trigger','${t.ticker}')">DISMISS</button></div></div>`;});
+  return html;}
+async function scanTriggers(){try{const r=await fetch(API+'/api/scan_triggers');if(r.ok){const d=await r.json();TRADES=(d.trades||[]).filter(t=>t.rule!=='WEEKLY_BUILD');render();}}catch(e){}}
+
+// ─── WEEKLY BUILD ───
+function renderWeeklyBuild(){const nav=DATA.nav||890e6,wt=Math.round(nav*0.65/50);
+  let html=`<div class="metrics"><div class="metric"><div class="metric-label">Fund NAV</div><div class="metric-value">$${fmt$(nav)}</div></div>
+    <div class="metric"><div class="metric-label">Weekly Target</div><div class="metric-value">$${fmt$(wt)}</div></div>
+    <div class="metric"><div class="metric-label">Builds</div><div class="metric-value">${BUILDS.length}</div></div>`;
+  if(BUILDS.length>0){const tc=BUILDS.reduce((s,t)=>s+t.net_credit*(t.risk_check?.contracts||1)*100,0);const ah=BUILDS.reduce((s,t)=>s+(t.risk_check?.hit_pct||0),0)/BUILDS.length;
+    html+=`<div class="metric"><div class="metric-label">Total Credit</div><div class="metric-value green">$${fmt$(Math.round(tc))}</div></div>
+    <div class="metric"><div class="metric-label">Avg Hit</div><div class="metric-value" style="color:${ah>=80?'#22c55e':ah>=60?'#d4a017':'#f59e0b'}">${ah.toFixed(0)}%</div></div>`;}
+  html+=`<div style="margin-left:auto;display:flex;gap:8px"><button class="btn btn-accent" style="padding:6px 14px;font-size:10px" onclick="runBuild()">RUN BUILD</button>
+    ${BUILDS.length>0?'<button class="btn btn-green" style="padding:6px 14px;font-size:10px" onclick="executeAllBuilds()">EXECUTE ALL</button>':''}</div></div>`;
+  if(!BUILDS.length){html+='<div style="padding:40px;text-align:center;color:#52556a;font-size:12px">Click RUN BUILD to generate trades from live chains.<br><span style="font-size:10px">Run pull_daily.py + pull_chains.py first.</span></div>';return html;}
+  html+=`<div class="grid"><table class="data-table"><thead><tr>`;
+  ['Ticker','Spot','IV','SC','SC Δ','SC bid','SP','SP Δ','SP bid','LP','Width','Net/sh','Target','Hit%','Ctrs','Exp',''].forEach(h=>html+=`<th>${h}</th>`);
+  html+=`</tr></thead><tbody>`;
+  BUILDS.forEach(t=>{const rc=t.risk_check||{},ol=t.open_legs||[];if(ol.length<3)return;
+    const sc=ol[0],sp=ol[1],lp=ol[2],spot=(DATA.positions||[]).find(p=>p.ticker===t.ticker)?.spot||0,iv=(DATA.positions||[]).find(p=>p.ticker===t.ticker)?.iv30||0;
+    const hc=rc.hit_pct>=90?'#22c55e':rc.hit_pct>=60?'#d4a017':'#f59e0b';
+    html+=`<tr><td class="bold text">${t.ticker}</td><td class="center mono">$${spot.toFixed(0)}</td><td class="center" style="color:${iv>60?'#f59e0b':'#7a7d8e'}">${iv}%</td>
+      <td class="center mono">${sc.strike}</td><td class="center mono dim">${(sc.est_delta||0).toFixed(2)}</td><td class="center mono green">${(sc.bid||0).toFixed(2)}</td>
+      <td class="center mono">${sp.strike}</td><td class="center mono dim">${(sp.est_delta||0).toFixed(2)}</td><td class="center mono green">${(sp.bid||0).toFixed(2)}</td>
+      <td class="center mono dim">${lp.strike}</td><td class="center mono dim">$${(rc.spread_width||0).toFixed(0)}</td>
+      <td class="center mono bold green">$${t.net_credit.toFixed(2)}</td><td class="center mono dim">$${(rc.weekly_target||0).toFixed(2)}</td>
+      <td class="center bold" style="color:${hc}">${(rc.hit_pct||0).toFixed(0)}%</td><td class="center mono dim">${rc.contracts||0}</td><td class="center mono dim">${sc.expiry||''}</td>
+      <td class="center"><div style="display:flex;gap:4px"><button class="btn btn-green" style="font-size:8px;padding:2px 6px" onclick="executeTrade('build','${t.ticker}')">✓</button><button class="btn btn-ghost" style="font-size:8px;padding:2px 6px" onclick="dismissTrade('build','${t.ticker}')">✗</button></div></td></tr>`;});
+  html+='</tbody></table></div>';
+  // Detail expandables
+  html+='<div style="margin-top:10px">';
+  BUILDS.forEach(t=>{const rc=t.risk_check||{},ol=t.open_legs||[];if(ol.length<3)return;
+    html+=`<details style="background:#0f1117;border:1px solid rgba(255,255,255,0.05);border-radius:6px;margin-bottom:3px"><summary style="padding:6px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:11px">
+      <span class="bold" style="width:50px">${t.ticker}</span><span class="dim">SC ${ol[0].strike} | SP ${ol[1].strike} | LP ${ol[2].strike}</span>
+      <span style="margin-left:auto" class="bold green">$${t.net_credit.toFixed(2)}/sh</span><span class="dim">${(rc.hit_pct||0).toFixed(0)}% hit</span></summary>
+      <div style="padding:4px 12px 8px;border-top:1px solid rgba(255,255,255,0.03)">`;
+    ol.forEach(l=>{const ac=l.action.includes('SELL')?'#22c55e':'#ef4444';
+      html+=`<div style="display:flex;gap:8px;padding:2px 0;font-size:10px"><span style="color:${ac};width:100px;font-weight:600">${l.action}</span>
+        <span class="mono dim" style="flex:1">${l.security||''}</span><span class="mono" style="width:50px;text-align:right">Δ ${(l.est_delta||0).toFixed(2)}</span>
+        <span class="mono green" style="width:55px;text-align:right">bid $${(l.bid||0).toFixed(2)}</span><span class="mono red" style="width:55px;text-align:right">ask $${(l.ask||0).toFixed(2)}</span>
+        <span class="mono" style="width:55px;text-align:right;font-weight:600;color:${ac}">$${l.est_price.toFixed(2)}</span></div>`;});
+    html+=`<div style="display:flex;gap:10px;margin-top:4px;font-size:9px;color:#52556a"><span>OTM: C ${(rc.call_otm_pct||0).toFixed(1)}% SP ${(rc.sput_otm_pct||0).toFixed(1)}% LP ${(rc.lput_otm_pct||0).toFixed(1)}%</span>
+      <span>Width: $${(rc.spread_width||0).toFixed(0)}</span><span>MaxLoss: $${(rc.max_loss_per_ctr||0).toFixed(2)}/ctr</span><span>DTE: ${rc.dte||0}</span></div></div></details>`;});
+  html+='</div>';return html;}
+async function runBuild(){try{const r=await fetch(API+'/api/run_build');if(r.ok){const d=await r.json();BUILDS=d.trades||[];render();}}catch(e){}}
+
+// ─── ACTION BUTTONS ───
+async function executeTrade(type,ticker){
+  if(!confirm(`Execute ${ticker} trade?`))return;
+  try{const r=await fetch(`${API}/api/execute/${type}/${ticker}`);if(r.ok){const d=await r.json();
+    if(d.status==='ok'){if(type==='trigger')TRADES=TRADES.filter(t=>t.ticker!==ticker);else BUILDS=BUILDS.filter(t=>t.ticker!==ticker);render();}
+  }}catch(e){}}
+async function dismissTrade(type,ticker){
+  try{const r=await fetch(`${API}/api/dismiss/${type}/${ticker}`);if(r.ok){
+    if(type==='trigger')TRADES=TRADES.filter(t=>t.ticker!==ticker);else BUILDS=BUILDS.filter(t=>t.ticker!==ticker);render();
+  }}catch(e){}}
+async function executeAllBuilds(){
+  if(!confirm(`Execute all ${BUILDS.length} weekly builds?`))return;
+  try{const r=await fetch(`${API}/api/execute_all_builds`);if(r.ok){BUILDS=[];render();}}catch(e){}}
+
+// ─── ALERTS ───
+function renderAlerts(){const counts={CRITICAL:0,URGENT:0,WARNING:0,INFO:0};ALERTS.forEach(a=>counts[a.level]++);
+  const lc={CRITICAL:'#ef4444',URGENT:'#f59e0b',WARNING:'#d4a017',INFO:'#22c55e'};
+  let html=`<div class="metrics">`;['CRITICAL','URGENT','WARNING','INFO'].forEach(l=>{if(counts[l]>0)html+=`<div class="metric"><div class="metric-label">${l}</div><div class="metric-value" style="color:${lc[l]}">${counts[l]}</div></div>`;});
+  html+=`<div class="metric"><div class="metric-label">Total</div><div class="metric-value">${ALERTS.length}</div></div></div>`;
+  ALERTS.forEach(a=>{const c=lc[a.level];html+=`<div class="alert-row alert-${a.level}"><span class="badge" style="background:${c}18;color:${c}">${a.level}</span>
+    <span class="bold" style="width:48px;font-size:11px">${a.ticker}</span><span class="badge badge-sm" style="background:rgba(91,106,191,0.1);color:#5b6abf">${a.rule}</span>
+    <span style="font-size:9px;width:14px;text-align:center" class="dim">${a.leg}</span><span style="flex:1;font-size:11px">${a.desc}</span>
+    <span style="font-size:10px;max-width:260px;text-align:right" class="dim">${a.action}</span>
+    ${a.level==='CRITICAL'||a.level==='URGENT'?`<button class="btn" style="background:${c};padding:3px 10px;font-size:9px">${a.rule==='R4'?'CLOSE SPREAD':'ACT'}</button>`:''}</div>`;});
+  if(!ALERTS.length)html+='<div style="padding:40px;text-align:center" class="muted">No alerts.</div>';return html;}
+
+// ─── EARNINGS ───
+function renderEarnings(){const EARN={"AMD":"2026-04-29","AMZN":"2026-04-24","GOOGL":"2026-04-22","HOOD":"2026-04-30","LRCX":"2026-04-23","MSTR":"2026-04-29","SCCO":"2026-04-24","PLTR":"2026-05-05","ALAB":"2026-05-06","LITE":"2026-05-06","RDDT":"2026-05-06","COHR":"2026-05-07","RBLX":"2026-05-07","FIX":"2026-05-01","PWR":"2026-05-01","FTNT":"2026-05-08","SMR":"2026-05-08","IREN":"2026-05-15","ADI":"2026-05-20","INTU":"2026-05-22","NVDA":"2026-05-28","CIEN":"2026-06-04","JBL":"2026-06-19"};
+  const LM={"ADI":8.1,"ALAB":18.2,"AMD":9.1,"AMZN":7.3,"CIEN":14.5,"COHR":15.3,"FIX":6.8,"FTNT":10.2,"GOOGL":6.8,"HOOD":15.4,"INTU":5.2,"IREN":22.0,"JBL":8.5,"LITE":13.1,"LRCX":10.4,"MSTR":12.8,"NVDA":9.8,"PLTR":16.8,"PWR":7.2,"RBLX":14.0,"RDDT":18.5,"SCCO":5.5,"SMR":20.1};
+  const rows=(DATA.positions||[]).filter(p=>EARN[p.ticker]).map(p=>{const d=Math.round((new Date(EARN[p.ticker])-new Date('2026-03-23'))/864e5);const iv=p.iv30||30,em=Math.round(iv*Math.sqrt(7/365)*100*11)/10,lm=LM[p.ticker];
+    const ir=Math.min(99,Math.round(iv*1.1)),ex=lm&&lm>em,sig=ir>=65&&ex?'STRONG':ir>=65?'IV HIGH':ex?'EXCEEDS':'';
+    return{ticker:p.ticker,spot:p.spot,iv,ir,em,lm,ex,date:EARN[p.ticker],d,sig};}).sort((a,b)=>a.d-b.d);
+  let html=`<div class="grid"><table class="data-table"><thead><tr>`;['Ticker','Spot','IV','Rank','EM%','Last','Date','Days','Signal',''].forEach(h=>html+=`<th>${h}</th>`);
+  html+='</tr></thead><tbody>';rows.forEach(d=>{const sc=d.sig==='STRONG'?'#22c55e':d.sig==='IV HIGH'?'#d4a017':d.sig==='EXCEEDS'?'#5b6abf':'#52556a';
+    const rc=d.ir>=70?'#ef4444':d.ir>=55?'#f59e0b':'#22c55e';
+    html+=`<tr><td class="bold text">${d.ticker}</td><td class="center mono">$${d.spot.toFixed(1)}</td><td class="center" style="color:${d.iv>50?'#f59e0b':'#7a7d8e'}">${d.iv}%</td>
+      <td class="center"><div style="display:flex;align-items:center;gap:3px;justify-content:center"><div style="width:28px;height:3px;border-radius:2px;background:rgba(255,255,255,0.08);overflow:hidden"><div style="height:100%;width:${d.ir}%;border-radius:2px;background:${rc}"></div></div><span style="font-size:9px;color:${d.ir>=65?'#f59e0b':'#7a7d8e'}">${d.ir}</span></div></td>
+      <td class="center mono">±${d.em}%</td><td class="center mono" style="color:${d.ex?'#ef4444':'#7a7d8e'}">${d.lm?'±'+d.lm+'%':'—'}</td>
+      <td class="center" style="color:${d.d<=14?'#d4a017':'#7a7d8e'};font-size:10px">${d.date}</td>
+      <td class="center" style="color:${d.d<=7?'#ef4444':d.d<=14?'#d4a017':'#7a7d8e'};font-weight:${d.d<=7?700:400}">${d.d}d</td>
+      <td class="center">${d.sig?`<span class="badge badge-sm" style="background:${sc}18;color:${sc}">${d.sig}</span>`:''}</td>
+      <td class="center"><button class="btn btn-accent" style="font-size:9px">BUILD</button></td></tr>`;});
+  html+='</tbody></table></div>';return html;}
+
+// ─── SETTINGS ───
+function renderSettings(){const rows=[['Strikes','CALL_OTM','5-7%','Short call OTM'],['','SPUT_OTM','3-4%','Short put OTM'],['','LPUT_OTM','8-10%','Long put OTM'],
+  ['R1','CAPTURE','90%','Close at this decay'],['','UNCAP','Yes','Leave uncapped'],['R3','CALL_Δ','0.60','Cover call'],['R4','PUT_Δ','0.85','Close spread'],
+  ['R5','LP_MULT','2.0x','Harvest threshold'],['','MODE','Alert','Discretionary'],['R6','DEEP_Δ','0.95','Layer 1'],['R7','EARN','5d','Before earnings'],['','RISK','30bps','Per name'],
+  ['Fund','NAV','Live','From Bloomberg'],['','YIELD','65%','Annual']];
+  let html='<div style="max-width:550px"><div class="grid"><table class="data-table"><thead><tr><th style="width:70px;text-align:left">Section</th><th style="width:100px;text-align:left">Param</th><th style="width:60px">Value</th><th style="text-align:left">Desc</th></tr></thead><tbody>';
+  rows.forEach(([s,p,v,d])=>{html+=`<tr><td class="${s?'bold text':''}" style="font-size:10px">${s||''}</td><td class="mono" style="color:#5b6abf;font-size:10px">${p}</td><td class="center mono bold">${v}</td><td class="dim" style="font-size:10px">${d}</td></tr>`;});
+  html+='</tbody></table></div></div>';return html;}
+
+// ─── INIT ───
+function updateClock(){document.getElementById('clock').textContent=new Date().toLocaleTimeString();}
+updateClock();setInterval(updateClock,1000);fetchData();setInterval(fetchData,10000);
+// Fast refresh: fetch live prices every 3s, re-render Performance tab with live equity spots
+setInterval(async()=>{
+  if (typeof HOSTED !== 'undefined' && HOSTED) {
+    try {
+      const r = await fetch(GIST_URL + '?t=' + Date.now());
+      if (r.ok) {
+        const hosted = await r.json();
+        if (hosted.positions) DATA = hosted;
+        if (hosted.live) LIVE = hosted.live;
+      }
+    } catch(e) {}
+    if(currentTab==='performance') render();
+    return;
+  }
+  await fetchLive();
+  // Update position spots from live data so options P&L uses current prices
+  if(LIVE?.prices && DATA?.positions){
+    DATA.positions.forEach(p=>{
+      const lp=LIVE.prices[p.ticker];
+      if(lp?.last) p.spot=lp.last;
+      if(lp?.open) p.spotOpen=lp.open;
+      if(lp?.chg_pct!=null) p.chgPct=lp.chg_pct;
+    });
+  }
+  if(currentTab==='performance') render();
+},3000);
+</script>
+</body>
+</html>
