@@ -65,7 +65,6 @@ const API = 'http://localhost:8000';
 // ─── HOSTED MODE ───
 const HOSTED = true;
 const GIST_URL = 'https://gist.githubusercontent.com/ULTYDASH/b2779d34c1a3973c901faee23ba0522d/raw/ulty_live.json';
-const GIST_API = 'https://api.github.com/gists/b2779d34c1a3973c901faee23ba0522d';
 
 let DATA = null, ALERTS = [], TRADES = [], BUILDS = [], ANALYTICS = null, COLLAPSED = {};
 let currentTab = 'performance';
@@ -83,29 +82,25 @@ const TABS = [
 async function fetchData() {
   if (typeof HOSTED !== 'undefined' && HOSTED) {
     try {
-      const r = await fetch(GIST_API, {headers:{'Accept':'application/vnd.github.v3+json'}, cache:'no-store'});
+      const r = await fetch(GIST_URL + '?t=' + Date.now(), {cache:'no-store'});
       if (r.ok) {
-        const gist = await r.json();
-        const content = gist?.files?.['ulty_live.json']?.content;
-        if (content) {
-          const hosted = JSON.parse(content);
-          if (hosted.positions) { DATA = hosted; ALERTS = genAlerts(DATA.positions); document.getElementById('statusDot').style.background='#22c55e'; if(DATA.nav) document.getElementById('navDisplay').textContent='$'+DATA.nav.toLocaleString()+' NAV'; }
-          if (hosted.live) LIVE = hosted.live;
-          if (hosted.analytics) ANALYTICS = hosted.analytics;
-          if (hosted.triggers) TRADES = hosted.triggers;
-          if (hosted.builds) BUILDS = hosted.builds;
+        const hosted = await r.json();
+        if (hosted.positions) { DATA = hosted; ALERTS = genAlerts(DATA.positions); document.getElementById('statusDot').style.background='#22c55e'; if(DATA.nav) document.getElementById('navDisplay').textContent='$'+DATA.nav.toLocaleString()+' NAV'; }
+        if (hosted.live) LIVE = hosted.live;
+        if (hosted.analytics) ANALYTICS = hosted.analytics;
+        if (hosted.triggers) TRADES = hosted.triggers;
+        if (hosted.builds) BUILDS = hosted.builds;
+        // Sync live prices into positions
+        if(LIVE?.prices && DATA?.positions){
+          DATA.positions.forEach(p=>{
+            const lp=LIVE.prices[p.ticker];
+            if(lp?.last) p.spot=lp.last;
+            if(lp?.open) p.spotOpen=lp.open;
+            if(lp?.chg_pct!=null) p.chgPct=lp.chg_pct;
+          });
         }
       }
     } catch(e) { document.getElementById('statusDot').style.background='#f59e0b'; }
-    // Sync live prices into positions
-    if(LIVE?.prices && DATA?.positions){
-      DATA.positions.forEach(p=>{
-        const lp=LIVE.prices[p.ticker];
-        if(lp?.last) p.spot=lp.last;
-        if(lp?.open) p.spotOpen=lp.open;
-        if(lp?.chg_pct!=null) p.chgPct=lp.chg_pct;
-      });
-    }
     render();
     return;
   }
@@ -587,22 +582,18 @@ updateClock();setInterval(updateClock,1000);fetchData();setInterval(fetchData,10
 setInterval(async()=>{
   if (typeof HOSTED !== 'undefined' && HOSTED) {
     try {
-      const r = await fetch(GIST_API, {headers:{'Accept':'application/vnd.github.v3+json'}, cache:'no-store'});
+      const r = await fetch(GIST_URL + '?t=' + Date.now(), {cache:'no-store'});
       if (r.ok) {
-        const gist = await r.json();
-        const content = gist?.files?.['ulty_live.json']?.content;
-        if (content) {
-          const hosted = JSON.parse(content);
-          if (hosted.positions) DATA = hosted;
-          if (hosted.live) LIVE = hosted.live;
-          if(LIVE?.prices && DATA?.positions){
-            DATA.positions.forEach(p=>{
-              const lp=LIVE.prices[p.ticker];
-              if(lp?.last) p.spot=lp.last;
-              if(lp?.open) p.spotOpen=lp.open;
-              if(lp?.chg_pct!=null) p.chgPct=lp.chg_pct;
-            });
-          }
+        const hosted = await r.json();
+        if (hosted.positions) DATA = hosted;
+        if (hosted.live) LIVE = hosted.live;
+        if(LIVE?.prices && DATA?.positions){
+          DATA.positions.forEach(p=>{
+            const lp=LIVE.prices[p.ticker];
+            if(lp?.last) p.spot=lp.last;
+            if(lp?.open) p.spotOpen=lp.open;
+            if(lp?.chg_pct!=null) p.chgPct=lp.chg_pct;
+          });
         }
       }
     } catch(e) {}
